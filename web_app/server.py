@@ -7,7 +7,7 @@ import subprocess
 from flask import Flask, render_template, request, jsonify, send_from_directory
 
 # Connect pipeline engine
-sys.path.append(r"C:\Users\COMPUTER\.gemini\antigravity\scratch\stream_to_shorts_pipeline")
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import pipeline_engine
 
 app = Flask(__name__, template_folder="templates")
@@ -115,7 +115,8 @@ def download_video(filename):
 
 if __name__ == "__main__":
     lan_ip = get_lan_ip()
-    print(f"Starting ClutchCuts Web Studio...")
-    print(f"PC Access:    http://localhost:5000")
-    print(f"Phone Access: http://{lan_ip}:5000")
-    app.run(host="0.0.0.0", port=5000, debug=False)
+    port = int(os.environ.get("PORT", 5000))
+    print(f"Starting ClutchCuts Web Studio on port {port}...")
+    print(f"PC Access:    http://localhost:{port}")
+    print(f"Phone Access: http://{lan_ip}:{port}")
+    app.run(host="0.0.0.0", port=port, debug=False)

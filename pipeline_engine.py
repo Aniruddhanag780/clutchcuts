@@ -11,12 +11,15 @@ APP_DIR = os.path.dirname(os.path.abspath(__file__))
 DEFAULT_OUTPUT_DIR = os.path.join(APP_DIR, "generated_shorts")
 
 def get_config():
+    ffmpeg = shutil.which("ffmpeg") or r"C:\Users\COMPUTER\AppData\Local\Microsoft\WinGet\Packages\Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe\ffmpeg-9.1-full_build\bin\ffmpeg.exe"
+    ffprobe = shutil.which("ffprobe") or r"C:\Users\COMPUTER\AppData\Local\Microsoft\WinGet\Packages\Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe\ffmpeg-9.1-full_build\bin\ffprobe.exe"
+    deno = shutil.which("deno") or r"C:\Users\COMPUTER\AppData\Local\Microsoft\WinGet\Packages\DenoLand.Deno_Microsoft.Winget.Source_8wekyb3d8bbwe\deno.exe"
     return {
         "output_directory": DEFAULT_OUTPUT_DIR,
-        "python_path": r"C:\Users\COMPUTER\AppData\Local\Programs\Python\Python311\python.exe",
-        "ffmpeg_path": r"C:\Users\COMPUTER\AppData\Local\Microsoft\WinGet\Packages\Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe\ffmpeg-9.1-full_build\bin\ffmpeg.exe",
-        "ffprobe_path": r"C:\Users\COMPUTER\AppData\Local\Microsoft\WinGet\Packages\Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe\ffmpeg-9.1-full_build\bin\ffprobe.exe",
-        "deno_path": r"C:\Users\COMPUTER\AppData\Local\Microsoft\WinGet\Packages\DenoLand.Deno_Microsoft.Winget.Source_8wekyb3d8bbwe\deno.exe"
+        "python_path": sys.executable,
+        "ffmpeg_path": ffmpeg,
+        "ffprobe_path": ffprobe,
+        "deno_path": deno
     }
 
 def format_ass_time(seconds):
@@ -77,7 +80,7 @@ def process_stream(url, clip_count=2, output_dir=None, progress_cb=None):
     if not output_dir:
         output_dir = DEFAULT_OUTPUT_DIR
     os.makedirs(output_dir, exist_ok=True)
-    temp_dir = os.path.join(r"C:\Users\COMPUTER\.gemini\antigravity\scratch\stream_to_shorts_pipeline", f"job_{int(time.time())}")
+    temp_dir = os.path.join(APP_DIR, f"job_{int(time.time())}")
     os.makedirs(temp_dir, exist_ok=True)
 
     def log(msg):
