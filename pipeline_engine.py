@@ -93,10 +93,11 @@ def process_stream(url, clip_count=2, output_dir=None, progress_cb=None):
     # Step 1: Ingest stream metadata
     log("Fetching stream metadata and community highlights...")
     import yt_dlp
+    js_runtimes = {'deno': {'path': cfg['deno_path']}} if cfg.get('deno_path') else {'deno': {}}
     ydl_opts = {
         'skip_download': True,
         'getcomments': True,
-        'js_runtimes': {'deno': [cfg['deno_path']]},
+        'js_runtimes': js_runtimes,
         'extractor_args': {
             'youtube': {
                 'comment_sort': ['top'],
@@ -160,13 +161,20 @@ def process_stream(url, clip_count=2, output_dir=None, progress_cb=None):
         log(f"Downloading stream slice ({start_sec}s to {end_sec}s)...")
         slice_cmd = [
             cfg['python_path'], "-m", "yt_dlp",
-            "--js-runtimes", f"deno:{cfg['deno_path']}",
-            "--ffmpeg-location", os.path.dirname(cfg['ffmpeg_path']),
             "--download-sections", f"*{start_sec}-{end_sec}",
             "-f", "136+140/bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/18/best",
             "--force-overwrites",
             url, "-o", raw_slice
         ]
+        if cfg.get('deno_path'):
+            slice_cmd.extend(["--js-runtimes", f"deno:{cfg['deno_path']}"])
+        else:
+            slice_cmd.extend(["--js-runtimes", "deno"])
+
+        ffmpeg_dir = os.path.dirname(cfg.get('ffmpeg_path', ''))
+        if ffmpeg_dir:
+            slice_cmd.extend(["--ffmpeg-location", ffmpeg_dir])
+
         subprocess.run(slice_cmd, check=True, capture_output=True)
 
         # Transcribe (Optimized with beam_size=1 for 4x faster CPU transcription)
