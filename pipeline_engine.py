@@ -90,28 +90,46 @@ def process_stream(url, clip_count=2, output_dir=None, progress_cb=None):
 
     log(f"Starting pipeline for URL: {url} | Count: {clip_count}")
 
-    # Step 1: Ingest stream metadata
+    # Step 1: Ingest stream metadata (Multi-client Android/iOS/TV/Web fallback)
     log("Fetching stream metadata and community highlights...")
     import yt_dlp
     js_runtimes = {'deno': {'path': cfg['deno_path']}} if cfg.get('deno_path') else {'deno': {}}
     ydl_opts = {
         'skip_download': True,
         'getcomments': True,
+        'ignoreerrors': True,
         'js_runtimes': js_runtimes,
         'extractor_args': {
             'youtube': {
+                'player_client': ['android', 'ios', 'tv', 'web'],
                 'comment_sort': ['top'],
                 'max_comments': ['150', 'all', '150', '0']
             }
         }
     }
     
-    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-        info = ydl.extract_info(url, download=False)
-        video_title = info.get('title', 'Gaming Stream')
-        duration = info.get('duration', 3600)
-        comments = info.get('comments', [])
-        log(f"Stream: '{video_title}' | Duration: {duration}s | Comments analyzed: {len(comments)}")
+    try:
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            info = ydl.extract_info(url, download=False)
+    except Exception as e:
+        log(f"Warning on full extraction, falling back to direct mobile client: {str(e)}")
+        fallback_opts = {
+            'skip_download': True,
+            'getcomments': False,
+            'js_runtimes': js_runtimes,
+            'extractor_args': {
+                'youtube': {
+                    'player_client': ['android', 'ios', 'tv']
+                }
+            }
+        }
+        with yt_dlp.YoutubeDL(fallback_opts) as ydl:
+            info = ydl.extract_info(url, download=False)
+
+    video_title = info.get('title', 'Gaming Stream') if info else 'Gaming Stream'
+    duration = info.get('duration', 3600) if info else 3600
+    comments = info.get('comments', []) if info else []
+    log(f"Stream: '{video_title}' | Duration: {duration}s | Comments analyzed: {len(comments)}")
 
     # Step 2: Peak moment detection
     log("Scanning for highest-energy moments...")
@@ -161,6 +179,7 @@ def process_stream(url, clip_count=2, output_dir=None, progress_cb=None):
         log(f"Downloading stream slice ({start_sec}s to {end_sec}s)...")
         slice_cmd = [
             cfg['python_path'], "-m", "yt_dlp",
+            "--extractor-args", "youtube:player_client=android,ios,tv,web",
             "--download-sections", f"*{start_sec}-{end_sec}",
             "-f", "136+140/bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/18/best",
             "--force-overwrites",
