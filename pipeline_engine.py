@@ -22,6 +22,88 @@ def get_config():
         "deno_path": deno
     }
 
+def extract_video_info(url, log):
+    import yt_dlp
+
+    cfg = get_config()
+    js_runtimes = {'deno': {'path': cfg['deno_path']}} if cfg.get('deno_path') else {}
+    common_opts = {
+        'skip_download': True,
+        'js_runtimes': js_runtimes,
+        'retries': 3,
+        'extractor_retries': 3,
+        'socket_timeout': 30,
+    }
+    attempts = [
+        (
+            "community highlights",
+            {
+                **common_opts,
+                'getcomments': True,
+                'extractor_args': {
+                    'youtube': {
+                        'player_client': ['android', 'ios', 'tv', 'web'],
+                        'comment_sort': ['top'],
+                        'max_comments': ['150', 'all', '150', '0'],
+                    }
+                },
+            },
+        ),
+        (
+            "mobile player without comments",
+            {
+                **common_opts,
+                'getcomments': False,
+                'extractor_args': {
+                    'youtube': {'player_client': ['android', 'ios', 'tv']}
+                },
+            },
+        ),
+        (
+            "yt-dlp default player selection",
+            {**common_opts, 'getcomments': False},
+        ),
+    ]
+
+    errors = []
+    for label, options in attempts:
+        try:
+            with yt_dlp.YoutubeDL(options) as ydl:
+                info = ydl.extract_info(url, download=False)
+            if info:
+                return info
+            errors.append(RuntimeError("yt-dlp returned no video details"))
+        except yt_dlp.utils.DownloadError as exc:
+            errors.append(exc)
+        if label != attempts[-1][0]:
+            log(f"YouTube {label} attempt failed; trying another player strategy: {errors[-1]}")
+
+    version = yt_dlp.version.__version__
+    raise RuntimeError(
+        f"YouTube did not return video details after {len(attempts)} attempts "
+        f"(yt-dlp {version}). Try again shortly and check that yt-dlp is current. "
+        f"Last error: {errors[-1]}"
+    ) from errors[-1]
+
+def download_video_slice(slice_cmd, clip_num, log):
+    try:
+        subprocess.run(slice_cmd, check=True, capture_output=True, text=True)
+    except subprocess.CalledProcessError as error:
+        details = (error.stderr or error.stdout or str(error)).strip()
+        log(f"Download with the preferred YouTube players failed: {details}")
+        log("Retrying this clip with yt-dlp's default player selection...")
+        retry_cmd = slice_cmd.copy()
+        extractor_args_index = retry_cmd.index("--extractor-args")
+        del retry_cmd[extractor_args_index:extractor_args_index + 2]
+        try:
+            subprocess.run(retry_cmd, check=True, capture_output=True, text=True)
+        except subprocess.CalledProcessError as retry_error:
+            retry_details = (retry_error.stderr or retry_error.stdout or str(retry_error)).strip()
+            raise RuntimeError(
+                f"Video slice #{clip_num} download failed with both YouTube player strategies. "
+                f"Try again shortly. Last error: {retry_details}"
+            ) from retry_error
+
 def format_ass_time(seconds):
     h = int(seconds // 3600)
     m = int((seconds % 3600) // 60)
@@ -101,44 +183,9 @@ def _process_stream(url, clip_count, output_dir, progress_cb, temp_dir):
 
     log(f"Starting pipeline for URL: {url} | Count: {clip_count}")
 
-    # Step 1: Ingest stream metadata (Multi-client Android/iOS/TV/Web fallback)
+    # Step 1: Ingest stream metadata with alternate YouTube player strategies.
     log("Fetching stream metadata and community highlights...")
-    import yt_dlp
-    js_runtimes = {'deno': {'path': cfg['deno_path']}} if cfg.get('deno_path') else {}
-    ydl_opts = {
-        'skip_download': True,
-        'getcomments': True,
-        'ignoreerrors': False,
-        'js_runtimes': js_runtimes,
-        'extractor_args': {
-            'youtube': {
-                'player_client': ['android', 'ios', 'tv', 'web'],
-                'comment_sort': ['top'],
-                'max_comments': ['150', 'all', '150', '0']
-            }
-        }
-    }
-    
-    try:
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info = ydl.extract_info(url, download=False)
-    except Exception as e:
-        log(f"Warning on full extraction, falling back to direct mobile client: {str(e)}")
-        fallback_opts = {
-            'skip_download': True,
-            'getcomments': False,
-            'js_runtimes': js_runtimes,
-            'extractor_args': {
-                'youtube': {
-                    'player_client': ['android', 'ios', 'tv']
-                }
-            }
-        }
-        with yt_dlp.YoutubeDL(fallback_opts) as ydl:
-            info = ydl.extract_info(url, download=False)
-
-    if not info:
-        raise RuntimeError("Could not read video details. Check the URL, access permissions, and try again.")
+    info = extract_video_info(url, log)
     video_title = info.get('title', 'Video')
     duration = info.get('duration') or 0
     if duration <= 0:
@@ -195,6 +242,8 @@ def _process_stream(url, clip_count, output_dir, progress_cb, temp_dir):
         log(f"Downloading stream slice ({start_sec}s to {end_sec}s)...")
         slice_cmd = [
             cfg['python_path'], "-m", "yt_dlp",
+            "--retries", "5",
+            "--extractor-retries", "5",
             "--extractor-args", "youtube:player_client=android,ios,tv,web",
             "--download-sections", f"*{start_sec}-{end_sec}",
             "-f", "bestvideo[height<=1080]+bestaudio/best[height<=1080]/best",
@@ -209,12 +258,7 @@ def _process_stream(url, clip_count, output_dir, progress_cb, temp_dir):
         if ffmpeg_dir and ffmpeg_dir not in ['/usr/bin', '/usr/local/bin', '/bin']:
             slice_cmd.extend(["--ffmpeg-location", ffmpeg_dir])
 
-        try:
-            subprocess.run(slice_cmd, check=True, capture_output=True, text=True)
-        except subprocess.CalledProcessError as e:
-            err_details = (e.stderr or e.stdout or str(e)).strip()
-            log(f"Slice download error details: {err_details}")
-            raise Exception(f"Video slice download failed: {err_details}")
+        download_video_slice(slice_cmd, clip_num, log)
 
         source_probe = subprocess.run(
             [

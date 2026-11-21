@@ -127,9 +127,11 @@
     .hero-copy { max-width: 580px; margin: 0; color: var(--muted); font-size: 15px; }
     .workspace {
       display: grid;
-      grid-template-columns: minmax(0, 1.45fr) minmax(260px, .75fr);
+      max-width: 980px;
+      grid-template-columns: minmax(0, 1.08fr) minmax(280px, .92fr);
       gap: 18px;
       align-items: stretch;
+      margin: 0 auto;
     }
     .panel {
       border: 1px solid var(--line);
@@ -137,7 +139,25 @@
       background: linear-gradient(150deg, rgba(25, 26, 41, .96), rgba(15, 16, 26, .96));
       box-shadow: 0 22px 70px rgba(0, 0, 0, .24), inset 0 1px rgba(255,255,255,.035);
     }
-    .input-panel { padding: 26px; }
+    .input-panel {
+      position: relative;
+      overflow: hidden;
+      padding: 26px;
+      border-color: rgba(195, 165, 255, .24);
+      background:
+        radial-gradient(ellipse at 0 0, rgba(167, 139, 250, .13), transparent 65%),
+        linear-gradient(150deg, rgba(25, 26, 41, .98), rgba(15, 16, 26, .98));
+      box-shadow: 0 22px 65px rgba(0, 0, 0, .3), 0 0 38px rgba(139, 92, 246, .07), inset 0 1px rgba(255,255,255,.05);
+    }
+    .input-panel::before {
+      position: absolute;
+      top: 0;
+      right: 24px;
+      left: 24px;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, rgba(196, 181, 253, .8), rgba(245, 203, 121, .7), transparent);
+      content: "";
+    }
     .panel-heading { display: flex; align-items: flex-start; gap: 13px; margin-bottom: 22px; }
     .heading-icon {
       display: grid;

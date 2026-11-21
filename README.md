@@ -62,6 +62,10 @@ Automate clipping YouTube and Twitch livestreams into viral 9:16 vertical Shorts
    ```bash
    pip install -r requirements.txt
    ```
+   If YouTube reports that no player response is available after retries, update yt-dlp and restart the studio:
+   ```bash
+   python -m pip install --upgrade yt-dlp
+   ```
 
 3. **Launch the Web App**:
    - On Windows: Double-click `START_STUDIO.bat` from the project folder. It uses the project’s current location and checks that Python dependencies are installed.
