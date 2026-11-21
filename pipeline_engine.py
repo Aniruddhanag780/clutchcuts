@@ -11,9 +11,9 @@ APP_DIR = os.path.dirname(os.path.abspath(__file__))
 DEFAULT_OUTPUT_DIR = os.path.join(APP_DIR, "generated_shorts")
 
 def get_config():
-    ffmpeg = shutil.which("ffmpeg") or r"C:\Users\COMPUTER\AppData\Local\Microsoft\WinGet\Packages\Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe\ffmpeg-9.1-full_build\bin\ffmpeg.exe"
-    ffprobe = shutil.which("ffprobe") or r"C:\Users\COMPUTER\AppData\Local\Microsoft\WinGet\Packages\Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe\ffmpeg-9.1-full_build\bin\ffprobe.exe"
-    deno = shutil.which("deno") or r"C:\Users\COMPUTER\AppData\Local\Microsoft\WinGet\Packages\DenoLand.Deno_Microsoft.Winget.Source_8wekyb3d8bbwe\deno.exe"
+    ffmpeg = os.environ.get("FFMPEG_PATH") or shutil.which("ffmpeg")
+    ffprobe = os.environ.get("FFPROBE_PATH") or shutil.which("ffprobe")
+    deno = os.environ.get("DENO_PATH") or shutil.which("deno")
     return {
         "output_directory": DEFAULT_OUTPUT_DIR,
         "python_path": sys.executable,
@@ -76,13 +76,24 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
         f.write(header + "\n".join(events) + "\n")
 
 def process_stream(url, clip_count=2, output_dir=None, progress_cb=None):
+    temp_dir = os.path.join(APP_DIR, f"job_{time.time_ns()}")
+    os.makedirs(temp_dir, exist_ok=True)
+    try:
+        return _process_stream(url, clip_count, output_dir, progress_cb, temp_dir)
+    finally:
+        shutil.rmtree(temp_dir, ignore_errors=True)
+
+def _process_stream(url, clip_count, output_dir, progress_cb, temp_dir):
     cfg = get_config()
+    if not cfg["ffmpeg_path"] or not os.path.isfile(cfg["ffmpeg_path"]):
+        raise RuntimeError("FFmpeg was not found. Install FFmpeg and add it to PATH, or set FFMPEG_PATH.")
+    if not cfg["ffprobe_path"] or not os.path.isfile(cfg["ffprobe_path"]):
+        raise RuntimeError("FFprobe was not found. Install FFmpeg and add it to PATH, or set FFPROBE_PATH.")
+    if clip_count not in (1, 2, 3, 5):
+        raise ValueError("Choose 1, 2, 3, or 5 shorts.")
     if not output_dir:
         output_dir = DEFAULT_OUTPUT_DIR
     os.makedirs(output_dir, exist_ok=True)
-    temp_dir = os.path.join(APP_DIR, f"job_{int(time.time())}")
-    os.makedirs(temp_dir, exist_ok=True)
-
     def log(msg):
         print(msg)
         if progress_cb:
@@ -93,11 +104,11 @@ def process_stream(url, clip_count=2, output_dir=None, progress_cb=None):
     # Step 1: Ingest stream metadata (Multi-client Android/iOS/TV/Web fallback)
     log("Fetching stream metadata and community highlights...")
     import yt_dlp
-    js_runtimes = {'deno': {'path': cfg['deno_path']}} if cfg.get('deno_path') else {'deno': {}}
+    js_runtimes = {'deno': {'path': cfg['deno_path']}} if cfg.get('deno_path') else {}
     ydl_opts = {
         'skip_download': True,
         'getcomments': True,
-        'ignoreerrors': True,
+        'ignoreerrors': False,
         'js_runtimes': js_runtimes,
         'extractor_args': {
             'youtube': {
@@ -126,9 +137,13 @@ def process_stream(url, clip_count=2, output_dir=None, progress_cb=None):
         with yt_dlp.YoutubeDL(fallback_opts) as ydl:
             info = ydl.extract_info(url, download=False)
 
-    video_title = info.get('title', 'Gaming Stream') if info else 'Gaming Stream'
-    duration = info.get('duration', 3600) if info else 3600
-    comments = info.get('comments', []) if info else []
+    if not info:
+        raise RuntimeError("Could not read video details. Check the URL, access permissions, and try again.")
+    video_title = info.get('title', 'Video')
+    duration = info.get('duration') or 0
+    if duration <= 0:
+        raise RuntimeError("This video has no available duration. Make sure it is a published video or VOD.")
+    comments = info.get('comments') or []
     log(f"Stream: '{video_title}' | Duration: {duration}s | Comments analyzed: {len(comments)}")
 
     # Step 2: Peak moment detection
@@ -142,7 +157,7 @@ def process_stream(url, clip_count=2, output_dir=None, progress_cb=None):
         matches = time_regex.findall(text)
         for m in matches:
             sec = int(m[0])*3600 + int(m[1])*60 + int(m[2]) if m[2] else int(m[0])*60 + int(m[1])
-            if 10 <= sec <= duration - 40:
+            if 10 <= sec <= duration - 32:
                 score = likes + (50 if any(k in text.lower() for k in ['clutch', 'fail', 'lol', 'police', 'fight', 'jump', 'kill', 'car']) else 10)
                 candidates.append((score, sec, text))
 
@@ -156,18 +171,19 @@ def process_stream(url, clip_count=2, output_dir=None, progress_cb=None):
         if len(selected_moments) >= clip_count:
             break
 
+    max_start = max(0, duration - 32)
     while len(selected_moments) < clip_count:
-        fallback_sec = int((len(selected_moments) + 1) * duration / (clip_count + 1))
+        fallback_sec = int((len(selected_moments) + 1) * max_start / (clip_count + 1))
         selected_moments.append(fallback_sec)
 
     log(f"Selected {len(selected_moments)} peak moment windows at: {[f'{s}s ({s//60}m{s%60}s)' for s in selected_moments]}")
 
     results = []
-    model = WhisperModel('base', device='cpu', compute_type='int8')
+    model = None
 
     for i, start_sec in enumerate(selected_moments):
         clip_num = i + 1
-        clip_len = 32
+        clip_len = min(32, max(1, duration - start_sec))
         end_sec = start_sec + clip_len
         log(f"\n--- Processing Short #{clip_num} ({start_sec}s - {end_sec}s) ---")
         
@@ -186,10 +202,8 @@ def process_stream(url, clip_count=2, output_dir=None, progress_cb=None):
             "--force-overwrites",
             url, "-o", raw_slice
         ]
-        if cfg.get('deno_path') and os.path.exists(cfg['deno_path']) and not cfg['deno_path'].startswith('/usr'):
+        if cfg.get('deno_path'):
             slice_cmd.extend(["--js-runtimes", f"deno:{cfg['deno_path']}"])
-        else:
-            slice_cmd.extend(["--js-runtimes", "deno"])
 
         ffmpeg_dir = os.path.dirname(cfg.get('ffmpeg_path', ''))
         if ffmpeg_dir and ffmpeg_dir not in ['/usr/bin', '/usr/local/bin', '/bin']:
@@ -202,16 +216,37 @@ def process_stream(url, clip_count=2, output_dir=None, progress_cb=None):
             log(f"Slice download error details: {err_details}")
             raise Exception(f"Video slice download failed: {err_details}")
 
+        source_probe = subprocess.run(
+            [
+                cfg['ffprobe_path'], "-v", "error", "-show_entries", "stream=codec_type",
+                "-of", "json", raw_slice
+            ],
+            capture_output=True,
+            text=True,
+        )
+        if source_probe.returncode:
+            details = (source_probe.stderr or "FFprobe could not inspect the downloaded clip.").strip()
+            raise RuntimeError(f"Could not inspect downloaded clip: {details}")
+        source_streams = json.loads(source_probe.stdout).get("streams", [])
+        if not any(stream.get("codec_type") == "video" for stream in source_streams):
+            raise RuntimeError("The downloaded clip does not contain a video stream.")
+        has_audio = any(stream.get("codec_type") == "audio" for stream in source_streams)
+
         # Transcribe (Optimized with beam_size=1 for 4x faster CPU transcription)
-        log("Transcribing with faster-whisper (word timestamps)...")
-        segments, _ = model.transcribe(raw_slice, task='translate', word_timestamps=True, beam_size=1)
         words = []
         transcript_text = []
-        for s in segments:
-            transcript_text.append(s.text.strip())
-            if s.words:
-                for w in s.words:
-                    words.append({'word': w.word, 'start': w.start, 'end': w.end})
+        if has_audio:
+            log("Transcribing with faster-whisper (word timestamps)...")
+            if model is None:
+                model = WhisperModel('base', device='cpu', compute_type='int8')
+            segments, _ = model.transcribe(raw_slice, task='translate', word_timestamps=True, beam_size=1)
+            for s in segments:
+                transcript_text.append(s.text.strip())
+                if s.words:
+                    for w in s.words:
+                        words.append({'word': w.word, 'start': w.start, 'end': w.end})
+        else:
+            log("No audio track found; rendering this short without captions.")
         full_transcript = " ".join(transcript_text)
 
         generate_ass(words, ass_path)
@@ -219,15 +254,18 @@ def process_stream(url, clip_count=2, output_dir=None, progress_cb=None):
         # Composite & Render 9:16 layout (Optimized ambient blur for 15x faster CPU encoding)
         log("Compositing 9:16 vertical layout with zero PTS drift...")
         ass_escaped = ass_path.replace('\\', '/').replace(':', r'\:')
+        audio_filter = (
+            "[0:a]asetpts=PTS-STARTPTS,aresample=async=1[a_sync];"
+            if has_audio
+            else f"anullsrc=r=44100:cl=stereo,atrim=duration={clip_len}[a_sync];"
+        )
         filter_complex = (
-            f"[0:v]setpts=PTS-STARTPTS,split=3[v_bg][v_cam][v_game];"
-            f"[0:a]asetpts=PTS-STARTPTS,aresample=async=1[a_sync];"
+            f"[0:v]setpts=PTS-STARTPTS,split=2[v_bg][v_fg];"
+            f"{audio_filter}"
             f"[v_bg]scale=180:320:force_original_aspect_ratio=increase,crop=180:320,boxblur=5:1,scale=1080:1920,eq=brightness=-0.15[bg];"
-            f"[v_cam]crop=360:280:910:10,scale=620:480[facecam];"
-            f"[v_game]crop=534:714:373:0,scale=1080:1440[gameplay];"
-            f"[bg][facecam]overlay=x=230:y=0[comp1];"
-            f"[comp1][gameplay]overlay=x=0:y=480[comp2];"
-            f"[comp2]subtitles=filename='{ass_escaped}'[v_out]"
+            f"[v_fg]scale=1080:1440:force_original_aspect_ratio=increase,crop=1080:1440[foreground];"
+            f"[bg][foreground]overlay=x=0:y=240[comp];"
+            f"[comp]subtitles=filename='{ass_escaped}'[v_out]"
         )
 
         render_cmd = [
@@ -244,7 +282,12 @@ def process_stream(url, clip_count=2, output_dir=None, progress_cb=None):
             "-ar", "44100",
             final_mp4
         ]
-        subprocess.run(render_cmd, check=True, capture_output=True)
+        try:
+            subprocess.run(render_cmd, check=True, capture_output=True, text=True)
+        except subprocess.CalledProcessError as e:
+            details = (e.stderr or e.stdout or str(e)).strip()
+            log(f"Render error details: {details}")
+            raise RuntimeError(f"Could not render short #{clip_num}: {details}") from e
 
         # Verify
         log("Verifying zero sync drift via ffprobe...")
@@ -253,7 +296,13 @@ def process_stream(url, clip_count=2, output_dir=None, progress_cb=None):
             "-show_entries", "stream=index,codec_name,start_time,duration",
             "-of", "json", final_mp4
         ]
-        subprocess.run(probe_cmd, capture_output=True, text=True)
+        probe_result = subprocess.run(probe_cmd, capture_output=True, text=True)
+        if probe_result.returncode:
+            details = (probe_result.stderr or "FFprobe could not verify the rendered file.").strip()
+            raise RuntimeError(f"Short #{clip_num} failed output verification: {details}")
+        output_streams = json.loads(probe_result.stdout).get("streams", [])
+        if not any(stream.get("codec_name") for stream in output_streams if stream.get("index") == 0):
+            raise RuntimeError(f"Short #{clip_num} does not contain a valid video stream.")
 
         results.append({
             'file': final_mp4,
@@ -263,6 +312,5 @@ def process_stream(url, clip_count=2, output_dir=None, progress_cb=None):
         })
         log(f"Short #{clip_num} is ready for direct browser download!")
 
-    shutil.rmtree(temp_dir, ignore_errors=True)
     log("\nAll shorts rendered! Ready to download to your phone or PC.")
     return results

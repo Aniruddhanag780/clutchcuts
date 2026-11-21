@@ -28,6 +28,7 @@ Automate clipping YouTube and Twitch livestreams into viral 9:16 vertical Shorts
    python --version
    ```
 2. **FFmpeg & FFprobe**:
+   Both commands must be available on your `PATH`. If they are installed elsewhere, set `FFMPEG_PATH` and `FFPROBE_PATH` to their full executable paths.
    - Windows:
      ```powershell
      winget install Gyan.FFmpeg --accept-package-agreements --accept-source-agreements
@@ -37,6 +38,7 @@ Automate clipping YouTube and Twitch livestreams into viral 9:16 vertical Shorts
      brew install ffmpeg
      ```
 3. **Deno (JavaScript Runtime for YouTube Challenges)**:
+   Deno is optional, but can help yt-dlp access some YouTube videos. If it is installed outside your `PATH`, set `DENO_PATH` to its executable.
    - Windows:
      ```powershell
      winget install DenoLand.Deno --accept-package-agreements --accept-source-agreements
@@ -62,7 +64,7 @@ Automate clipping YouTube and Twitch livestreams into viral 9:16 vertical Shorts
    ```
 
 3. **Launch the Web App**:
-   - On Windows: Double-click `START_STUDIO.bat`
+   - On Windows: Double-click `START_STUDIO.bat` from the project folder. It uses the project’s current location and checks that Python dependencies are installed.
    - Or via terminal:
      ```bash
      python web_app/server.py
@@ -71,6 +73,8 @@ Automate clipping YouTube and Twitch livestreams into viral 9:16 vertical Shorts
 4. **Open in your browser**:
    - On your PC: `http://localhost:5000`
    - On your Phone (same Wi-Fi): `http://<YOUR_LOCAL_IP>:5000`
+
+   Netlify serves only the static preview; video processing requires the Python backend. Use the local app above or deploy the Docker backend to a server with FFmpeg and enough memory for Whisper.
 
 ---
 

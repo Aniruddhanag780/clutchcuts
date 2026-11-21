@@ -1,9 +1,8 @@
 import os
 import sys
-import json
 import socket
 import threading
-import subprocess
+from urllib.parse import urlparse
 from flask import Flask, render_template, request, jsonify, send_from_directory
 
 # Connect pipeline engine
@@ -27,8 +26,10 @@ STATE = {
     "progress": 0,
     "status_message": "Ready to generate shorts",
     "logs": [],
-    "current_results": []
+    "current_results": [],
+    "error": None
 }
+JOB_LOCK = threading.Lock()
 
 def get_lan_ip():
     try:
@@ -41,45 +42,66 @@ def get_lan_ip():
 
 @app.route("/")
 def index():
-    lan_ip = get_lan_ip()
-    return render_template("index.html", lan_ip=lan_ip)
+    return render_template("index.html")
 
 @app.route("/api/status")
 def status():
-    return jsonify(STATE)
+    with JOB_LOCK:
+        snapshot = dict(STATE)
+        snapshot["logs"] = list(STATE["logs"])
+        snapshot["current_results"] = list(STATE["current_results"])
+    return jsonify(snapshot)
 
 @app.route("/api/generate", methods=["POST"])
 def generate():
-    if STATE["is_running"]:
-        return jsonify({"error": "A job is already in progress"}), 400
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        return jsonify({"error": "Send a JSON body containing a video URL"}), 400
 
-    data = request.json or {}
-    url = data.get("url", "").strip()
-    clip_count = int(data.get("clip_count", 2))
-
-    if not url:
+    url = data.get("url")
+    if not isinstance(url, str):
         return jsonify({"error": "Please provide a valid stream or video URL"}), 400
+    url = url.strip()
+    parsed_url = urlparse(url)
+    if parsed_url.scheme not in ("http", "https") or not parsed_url.hostname:
+        return jsonify({"error": "Enter a valid YouTube or Twitch URL starting with http:// or https://"}), 400
 
-    STATE["is_running"] = True
-    STATE["progress"] = 5
-    STATE["status_message"] = "Initializing stream processing..."
-    STATE["logs"] = []
-    STATE["current_results"] = []
+    count_value = data.get("clip_count", 2)
+    if isinstance(count_value, bool) or not isinstance(count_value, (int, str)):
+        return jsonify({"error": "Choose 1, 2, 3, or 5 shorts"}), 400
+    try:
+        clip_count = int(count_value)
+    except (TypeError, ValueError):
+        return jsonify({"error": "Choose 1, 2, 3, or 5 shorts"}), 400
+    if clip_count not in (1, 2, 3, 5):
+        return jsonify({"error": "Choose 1, 2, 3, or 5 shorts"}), 400
+
+    with JOB_LOCK:
+        if STATE["is_running"]:
+            return jsonify({"error": "A job is already in progress"}), 409
+
+        STATE["is_running"] = True
+        STATE["progress"] = 5
+        STATE["status_message"] = "Initializing stream processing..."
+        STATE["logs"] = []
+        STATE["current_results"] = []
+        STATE["error"] = None
 
     def task():
         def progress_cb(msg):
-            STATE["logs"].append(msg)
-            STATE["status_message"] = msg
-            if "Scanning" in msg:
-                STATE["progress"] = 25
-            elif "Processing Short" in msg:
-                STATE["progress"] = 50
-            elif "Compositing" in msg:
-                STATE["progress"] = 75
-            elif "Verifying" in msg:
-                STATE["progress"] = 90
-            elif "All shorts rendered" in msg:
-                STATE["progress"] = 100
+            with JOB_LOCK:
+                STATE["logs"].append(msg)
+                STATE["status_message"] = msg
+                if "Scanning" in msg:
+                    STATE["progress"] = 25
+                elif "Processing Short" in msg:
+                    STATE["progress"] = 50
+                elif "Compositing" in msg:
+                    STATE["progress"] = 75
+                elif "Verifying" in msg:
+                    STATE["progress"] = 90
+                elif "All shorts rendered" in msg:
+                    STATE["progress"] = 100
 
         try:
             results = pipeline_engine.process_stream(
@@ -88,14 +110,19 @@ def generate():
                 output_dir=STORAGE_DIR,
                 progress_cb=progress_cb
             )
-            STATE["current_results"] = results
-            STATE["status_message"] = "Completed! Ready for instant download."
-            STATE["progress"] = 100
+            with JOB_LOCK:
+                STATE["current_results"] = results
+                STATE["status_message"] = "Completed! Your shorts are ready to preview and download."
+                STATE["progress"] = 100
         except Exception as e:
-            STATE["status_message"] = f"Error: {str(e)}"
-            STATE["logs"].append(f"EXCEPTION: {str(e)}")
+            message = str(e).strip() or "An unexpected processing error occurred."
+            with JOB_LOCK:
+                STATE["status_message"] = message
+                STATE["logs"].append(f"ERROR: {message}")
+                STATE["error"] = message
         finally:
-            STATE["is_running"] = False
+            with JOB_LOCK:
+                STATE["is_running"] = False
 
     t = threading.Thread(target=task, daemon=True)
     t.start()
@@ -106,7 +133,11 @@ def generate():
 def list_videos():
     if not os.path.exists(STORAGE_DIR):
         return jsonify([])
-    files = [f for f in os.listdir(STORAGE_DIR) if f.lower().endswith(".mp4")]
+    files = [
+        f for f in os.listdir(STORAGE_DIR)
+        if f.lower().endswith(".mp4")
+        and os.path.isfile(os.path.join(STORAGE_DIR, f))
+    ]
     files.sort(key=lambda x: os.path.getmtime(os.path.join(STORAGE_DIR, x)), reverse=True)
     return jsonify([{"name": f, "size_mb": round(os.path.getsize(os.path.join(STORAGE_DIR, f)) / (1024*1024), 2)} for f in files])
 
