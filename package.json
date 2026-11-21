@@ -1,0 +1,16 @@
+{
+  "name": "clutchcuts-studio",
+  "version": "1.0.0",
+  "description": "ClutchCuts AI - Stream to Viral 9:16 Shorts Studio",
+  "scripts": {
+    "build": "echo 'ClutchCuts Studio build complete!'"
+  },
+  "keywords": [
+    "shorts",
+    "video-editor",
+    "youtube-shorts",
+    "ai-clipper"
+  ],
+  "author": "Aniruddhanag780",
+  "license": "MIT"
+}
