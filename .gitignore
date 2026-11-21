@@ -21,9 +21,10 @@ wheels/
 .installed.cfg
 *.egg
 
-# Virtual environments
-venv/
-ENV/
+# Environment variables & secrets
+.env
+.env.*
+*.env
 
 # Temporary video and job files
 *.mp4
