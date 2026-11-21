@@ -8,10 +8,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Deno for yt-dlp YouTube challenge solving
-RUN curl -fsSL https://deno.land/install.sh | sh
-ENV DENO_INSTALL="/root/.deno"
-ENV PATH="${DENO_INSTALL}/bin:${PATH}"
+# Install Deno globally to /usr/local/bin for yt-dlp
+RUN curl -fsSL https://deno.land/install.sh | sh && \
+    cp /root/.deno/bin/deno /usr/local/bin/deno && \
+    chmod 755 /usr/local/bin/deno
+ENV PATH="/usr/local/bin:${PATH}"
 
 WORKDIR /app
 

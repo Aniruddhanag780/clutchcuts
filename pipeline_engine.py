@@ -175,26 +175,32 @@ def process_stream(url, clip_count=2, output_dir=None, progress_cb=None):
         ass_path = os.path.join(temp_dir, f"subs_{clip_num}.ass")
         final_mp4 = os.path.join(output_dir, f"viral_short_{clip_num}_{int(time.time())}.mp4")
 
-        # Download slice
+        # Download slice (Universal format selector + safe error logging)
         log(f"Downloading stream slice ({start_sec}s to {end_sec}s)...")
         slice_cmd = [
             cfg['python_path'], "-m", "yt_dlp",
             "--extractor-args", "youtube:player_client=android,ios,tv,web",
             "--download-sections", f"*{start_sec}-{end_sec}",
-            "-f", "136+140/bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/18/best",
+            "-f", "bestvideo[height<=1080]+bestaudio/best[height<=1080]/best",
+            "--merge-output-format", "mp4",
             "--force-overwrites",
             url, "-o", raw_slice
         ]
-        if cfg.get('deno_path'):
+        if cfg.get('deno_path') and os.path.exists(cfg['deno_path']) and not cfg['deno_path'].startswith('/usr'):
             slice_cmd.extend(["--js-runtimes", f"deno:{cfg['deno_path']}"])
         else:
             slice_cmd.extend(["--js-runtimes", "deno"])
 
         ffmpeg_dir = os.path.dirname(cfg.get('ffmpeg_path', ''))
-        if ffmpeg_dir:
+        if ffmpeg_dir and ffmpeg_dir not in ['/usr/bin', '/usr/local/bin', '/bin']:
             slice_cmd.extend(["--ffmpeg-location", ffmpeg_dir])
 
-        subprocess.run(slice_cmd, check=True, capture_output=True)
+        try:
+            subprocess.run(slice_cmd, check=True, capture_output=True, text=True)
+        except subprocess.CalledProcessError as e:
+            err_details = (e.stderr or e.stdout or str(e)).strip()
+            log(f"Slice download error details: {err_details}")
+            raise Exception(f"Video slice download failed: {err_details}")
 
         # Transcribe (Optimized with beam_size=1 for 4x faster CPU transcription)
         log("Transcribing with faster-whisper (word timestamps)...")
