@@ -12,6 +12,13 @@ import pipeline_engine
 
 app = Flask(__name__, template_folder="templates")
 
+@app.after_request
+def add_cors(response):
+    response.headers["Access-Control-Allow-Origin"] = "*"
+    response.headers["Access-Control-Allow-Headers"] = "Content-Type,Authorization"
+    response.headers["Access-Control-Allow-Methods"] = "GET,POST,OPTIONS"
+    return response
+
 STORAGE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "generated_shorts")
 os.makedirs(STORAGE_DIR, exist_ok=True)
 
