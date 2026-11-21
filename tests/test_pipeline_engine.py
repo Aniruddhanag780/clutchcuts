@@ -47,6 +47,31 @@ class ExtractVideoInfoTests(unittest.TestCase):
         self.assertFalse(youtube_dl.call_args_list[2].args[0]["getcomments"])
         self.assertEqual(len(logs), 2)
 
+    def test_uses_opt_in_browser_cookies_for_video_details(self):
+        info = {"title": "test video", "duration": 120}
+        with (
+            patch.object(
+                pipeline_engine,
+                "get_config",
+                return_value={"deno_path": None, "cookies_browser": "chrome"},
+            ),
+            patch.object(yt_dlp, "YoutubeDL", return_value=StubYoutubeDL(info)) as youtube_dl,
+        ):
+            result = pipeline_engine.extract_video_info("https://youtu.be/example", lambda _: None)
+
+        self.assertEqual(result, info)
+        self.assertEqual(youtube_dl.call_args.args[0]["cookiesfrombrowser"], ("chrome",))
+
+    def test_explains_youtube_bot_verification_error(self):
+        blocked = yt_dlp.utils.DownloadError("Sign in to confirm you're not a bot")
+        attempts = [StubYoutubeDL(blocked) for _ in range(3)]
+        with (
+            patch.object(pipeline_engine, "get_config", return_value={"deno_path": None}),
+            patch.object(yt_dlp, "YoutubeDL", side_effect=attempts),
+        ):
+            with self.assertRaisesRegex(RuntimeError, "YTDLP_COOKIES_FROM_BROWSER"):
+                pipeline_engine.extract_video_info("https://youtu.be/example", lambda _: None)
+
     def test_retries_slice_download_with_default_player_selection(self):
         command = [
             "python", "-m", "yt_dlp", "--extractor-args",
@@ -63,6 +88,11 @@ class ExtractVideoInfoTests(unittest.TestCase):
         self.assertIn("--extractor-args", run.call_args_list[0].args[0])
         self.assertNotIn("--extractor-args", run.call_args_list[1].args[0])
         self.assertTrue(any("default player selection" in message for message in logs))
+
+    def test_browser_cookie_settings_cover_api_and_cli(self):
+        cfg = {"cookies_browser": "chrome"}
+        self.assertEqual(pipeline_engine.get_cookie_options(cfg), {"cookiesfrombrowser": ("chrome",)})
+        self.assertEqual(pipeline_engine.get_cookie_cli_args(cfg), ["--cookies-from-browser", "chrome"])
 
 
 if __name__ == "__main__":

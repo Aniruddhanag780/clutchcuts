@@ -14,13 +14,26 @@ def get_config():
     ffmpeg = os.environ.get("FFMPEG_PATH") or shutil.which("ffmpeg")
     ffprobe = os.environ.get("FFPROBE_PATH") or shutil.which("ffprobe")
     deno = os.environ.get("DENO_PATH") or shutil.which("deno")
+    cookies_browser = os.environ.get("YTDLP_COOKIES_FROM_BROWSER", "").strip()
     return {
         "output_directory": DEFAULT_OUTPUT_DIR,
         "python_path": sys.executable,
         "ffmpeg_path": ffmpeg,
         "ffprobe_path": ffprobe,
-        "deno_path": deno
+        "deno_path": deno,
+        "cookies_browser": cookies_browser or None
     }
+
+def get_cookie_options(cfg):
+    browser = cfg.get("cookies_browser")
+    return {"cookiesfrombrowser": (browser,)} if browser else {}
+
+def get_cookie_cli_args(cfg):
+    browser = cfg.get("cookies_browser")
+    return ["--cookies-from-browser", browser] if browser else []
+
+def is_bot_verification_error(message):
+    return "sign in to confirm you're not a bot" in message.lower()
 
 def extract_video_info(url, log):
     import yt_dlp
@@ -34,6 +47,7 @@ def extract_video_info(url, log):
         'extractor_retries': 3,
         'socket_timeout': 30,
     }
+    common_opts.update(get_cookie_options(cfg))
     attempts = [
         (
             "default player selection",
@@ -79,10 +93,18 @@ def extract_video_info(url, log):
             log(f"YouTube details were unavailable with {label}; retrying with another strategy: {errors[-1]}")
 
     version = yt_dlp.version.__version__
+    last_error = str(errors[-1])
+    if is_bot_verification_error(last_error):
+        raise RuntimeError(
+            "YouTube requires bot verification for this request. If you are signed in to YouTube "
+            "in a local browser, set YTDLP_COOKIES_FROM_BROWSER to that browser name and restart "
+            "the studio. Otherwise, try again later or use another publicly accessible video. "
+            f"Last error: {last_error}"
+        ) from errors[-1]
     raise RuntimeError(
         f"YouTube did not return video details after {len(attempts)} attempts "
         f"(yt-dlp {version}). Try again shortly and check that yt-dlp is current. "
-        f"Last error: {errors[-1]}"
+        f"Last error: {last_error}"
     ) from errors[-1]
 
 def download_video_slice(slice_cmd, clip_num, log):
@@ -99,6 +121,13 @@ def download_video_slice(slice_cmd, clip_num, log):
             subprocess.run(retry_cmd, check=True, capture_output=True, text=True)
         except subprocess.CalledProcessError as retry_error:
             retry_details = (retry_error.stderr or retry_error.stdout or str(retry_error)).strip()
+            if is_bot_verification_error(retry_details):
+                raise RuntimeError(
+                    "YouTube requires bot verification during download. If you are signed in to "
+                    "YouTube in a local browser, set YTDLP_COOKIES_FROM_BROWSER to that browser "
+                    "name and restart the studio. Otherwise, try again later or use another "
+                    f"publicly accessible video. Last error: {retry_details}"
+                ) from retry_error
             raise RuntimeError(
                 f"Video slice #{clip_num} download failed with both YouTube player strategies. "
                 f"Try again shortly. Last error: {retry_details}"
@@ -249,8 +278,9 @@ def _process_stream(url, clip_count, output_dir, progress_cb, temp_dir):
             "-f", "bestvideo[height<=1080]+bestaudio/best[height<=1080]/best",
             "--merge-output-format", "mp4",
             "--force-overwrites",
-            url, "-o", raw_slice
         ]
+        slice_cmd.extend(get_cookie_cli_args(cfg))
+        slice_cmd.extend([url, "-o", raw_slice])
         if cfg.get('deno_path'):
             slice_cmd.extend(["--js-runtimes", f"deno:{cfg['deno_path']}"])
 

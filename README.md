@@ -66,6 +66,16 @@ Automate clipping YouTube and Twitch livestreams into viral 9:16 vertical Shorts
    ```bash
    python -m pip install --upgrade yt-dlp
    ```
+   If YouTube asks you to sign in to confirm you're not a bot, you can optionally let yt-dlp use
+   cookies from a browser where you are signed in. Set `YTDLP_COOKIES_FROM_BROWSER` to the browser
+   name before starting the studio (for example, `chrome`, `firefox`, or `edge`). In PowerShell:
+   ```powershell
+   $env:YTDLP_COOKIES_FROM_BROWSER = "chrome"
+   python web_app/server.py
+   ```
+   The setting is opt-in; yt-dlp reads cookies locally from that browser for metadata and downloads.
+   Never share exported cookie files or logs containing authentication data. This does not grant
+   access to videos your account cannot view.
 
 3. **Launch the Web App**:
    - On Windows: Double-click `START_STUDIO.bat` from the project folder. It uses the project’s current location and checks that Python dependencies are installed.
