@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ClutchCuts AI — Stream-to-Shorts Studio</title>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #0b0f19;
+      --card-bg: #131b2e;
+      --border: #1e293b;
+      --accent: #8b5cf6;
+      --accent-hover: #7c3aed;
+      --neon-yellow: #facc15;
+      --green-download: #10b981;
+      --green-hover: #059669;
+      --text: #f8fafc;
+      --text-muted: #94a3b8;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      padding: 24px 16px;
+      min-height: 100vh;
+    }
+    .container {
+      max-width: 1000px;
+      margin: 0 auto;
+    }
+    header {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      align-items: center;
+      gap: 16px;
+      margin-bottom: 24px;
+      padding-bottom: 18px;
+      border-bottom: 1px solid var(--border);
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .brand-logo {
+      width: 44px;
+      height: 44px;
+      background: linear-gradient(135deg, #8b5cf6, #ec4899);
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 24px;
+      box-shadow: 0 0 20px rgba(139, 92, 246, 0.4);
+    }
+    .brand-title {
+      font-size: 22px;
+      font-weight: 800;
+      letter-spacing: -0.5px;
+    }
+    .brand-title span { color: var(--neon-yellow); }
+    .device-pill {
+      background: rgba(16, 185, 129, 0.12);
+      border: 1px solid rgba(16, 185, 129, 0.4);
+      color: #34d399;
+      padding: 8px 16px;
+      border-radius: 24px;
+      font-size: 13px;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      padding: 24px;
+      margin-bottom: 24px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+    }
+    .card-title {
+      font-size: 18px;
+      font-weight: 700;
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .form-group {
+      margin-bottom: 18px;
+    }
+    label {
+      display: block;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-muted);
+      margin-bottom: 8px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    input[type="text"], select {
+      width: 100%;
+      background: #0f172a;
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 14px 16px;
+      border-radius: 10px;
+      font-size: 15px;
+      outline: none;
+      transition: all 0.2s;
+    }
+    input[type="text"]:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.2);
+    }
+    .btn {
+      background: linear-gradient(135deg, var(--accent), var(--accent-hover));
+      color: white;
+      border: none;
+      padding: 16px 24px;
+      border-radius: 12px;
+      font-size: 16px;
+      font-weight: 700;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      width: 100%;
+      transition: all 0.2s;
+      text-decoration: none;
+      box-shadow: 0 4px 20px rgba(139, 92, 246, 0.35);
+    }
+    .btn:hover:not(:disabled) {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 25px rgba(139, 92, 246, 0.5);
+    }
+    .btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    .btn-download {
+      background: linear-gradient(135deg, var(--green-download), var(--green-hover));
+      box-shadow: 0 4px 20px rgba(16, 185, 129, 0.35);
+      font-size: 15px;
+      padding: 13px 18px;
+    }
+    .btn-download:hover {
+      box-shadow: 0 6px 25px rgba(16, 185, 129, 0.5);
+    }
+    .progress-bar-container {
+      height: 8px;
+      background: #1e293b;
+      border-radius: 4px;
+      overflow: hidden;
+      margin: 15px 0;
+    }
+    .progress-bar {
+      height: 100%;
+      background: linear-gradient(90deg, var(--accent), var(--neon-yellow));
+      width: 0%;
+      transition: width 0.3s;
+    }
+    .terminal {
+      background: #070b13;
+      border: 1px solid #1e293b;
+      border-radius: 12px;
+      padding: 16px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 13px;
+      color: #38bdf8;
+      max-height: 220px;
+      overflow-y: auto;
+      line-height: 1.6;
+    }
+    .gallery {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 22px;
+    }
+    .short-card {
+      background: #0f172a;
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      transition: transform 0.2s;
+    }
+    .short-card:hover {
+      border-color: #334155;
+    }
+    .video-wrapper {
+      position: relative;
+      width: 100%;
+      padding-top: 177.77%; /* 9:16 aspect ratio */
+      background: black;
+      border-radius: 12px;
+      overflow: hidden;
+    }
+    .video-wrapper video {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+    .short-title {
+      font-size: 16px;
+      font-weight: 700;
+      color: var(--neon-yellow);
+    }
+    .short-meta {
+      font-size: 13px;
+      color: var(--text-muted);
+    }
+    .copy-box {
+      background: #1e293b;
+      padding: 10px 12px;
+      border-radius: 8px;
+      font-size: 13px;
+      color: #cbd5e1;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+    }
+    .copy-btn {
+      background: #334155;
+      color: white;
+      border: none;
+      padding: 5px 12px;
+      border-radius: 6px;
+      font-size: 11px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .copy-btn:hover { background: var(--accent); }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <header>
+    <div class="brand">
+      <div class="brand-logo">⚡</div>
+      <div>
+        <div class="brand-title">ClutchCuts <span>Studio</span></div>
+        <div style="font-size: 12px; color: var(--text-muted);">Auto Stream-to-Shorts • Zero Destination Required</div>
+      </div>
+    </div>
+    <div class="device-pill">
+      <span>📱 Access on Phone:</span>
+      <strong style="color: white; cursor: pointer;" onclick="navigator.clipboard.writeText('http://{{ lan_ip }}:5000'); alert('Copied mobile link to clipboard!')">http://{{ lan_ip }}:5000</strong>
+    </div>
+  </header>
+
+  <!-- Input Card (No Destination Folder Required) -->
+  <div class="card">
+    <div class="card-title">🎥 Stream Ingestion</div>
+    <div class="form-group">
+      <label>YouTube or Twitch Video URL</label>
+      <input type="text" id="streamUrl" placeholder="https://www.youtube.com/watch?v=..." value="https://youtu.be/169ZzvPxvvM">
+    </div>
+    <div class="form-group">
+      <label>Number of Shorts to Generate</label>
+      <select id="clipCount">
+        <option value="1">1 Short (Top Viral Moment)</option>
+        <option value="2" selected>2 Shorts (Action + Humor)</option>
+        <option value="3">3 Shorts</option>
+        <option value="5">5 Shorts</option>
+      </select>
+    </div>
+
+    <button class="btn" id="generateBtn" onclick="startGeneration()">
+      <span>⚡ Generate Viral Shorts</span>
+    </button>
+  </div>
+
+  <!-- Live Progress Card -->
+  <div class="card" id="statusCard" style="display: none;">
+    <div class="card-title" id="statusHeader">⚙️ Processing Stream...</div>
+    <div style="font-size: 14px; color: #38bdf8; font-weight: 600;" id="statusMsg">Initializing...</div>
+    <div class="progress-bar-container">
+      <div class="progress-bar" id="progressBar"></div>
+    </div>
+    <div class="terminal" id="terminalLogs"></div>
+  </div>
+
+  <!-- Results Section -->
+  <div class="card">
+    <div class="card-title">📥 Ready to Download Shorts</div>
+    <div class="gallery" id="resultsGallery">
+      <div style="color: var(--text-muted); font-size: 14px;">Loading existing shorts...</div>
+    </div>
+  </div>
+</div>
+
+<script>
+  let pollingInterval = null;
+
+  async function loadExistingVideos() {
+    try {
+      const res = await fetch('/api/videos');
+      const videos = await res.json();
+      const gallery = document.getElementById('resultsGallery');
+      if (videos.length === 0) {
+        gallery.innerHTML = '<div style="color: var(--text-muted); font-size: 14px;">No shorts generated yet. Paste a link above to start!</div>';
+        return;
+      }
+      gallery.innerHTML = '';
+      videos.forEach(v => {
+        gallery.appendChild(createVideoCard(v.name, v.size_mb));
+      });
+    } catch (e) {
+      console.error(e);
+    }
+  }
+
+  function createVideoCard(filename, sizeMb) {
+    const card = document.createElement('div');
+    card.className = 'short-card';
+    card.innerHTML = `
+      <div class="video-wrapper">
+        <video controls playsinline preload="metadata" src="/videos/${encodeURIComponent(filename)}"></video>
+      </div>
+      <div class="short-title">${filename}</div>
+      <div class="short-meta">Size: ${sizeMb} MB • 1080x1920 (9:16 Vertical)</div>
+      
+      <!-- Direct Download Button for Phone, PC, Tablet -->
+      <a href="/download/${encodeURIComponent(filename)}" download="${filename}" class="btn btn-download">
+        <span>📥 Download Video (MP4)</span>
+      </a>
+
+      <div class="copy-box">
+        <span>#Shorts #Gaming #Viral</span>
+        <button class="copy-btn" onclick="navigator.clipboard.writeText('#Shorts #Gaming #Viral #ClutchCuts')">Copy Tags</button>
+      </div>
+    `;
+    return card;
+  }
+
+  async function startGeneration() {
+    const url = document.getElementById('streamUrl').value.trim();
+    const clipCount = document.getElementById('clipCount').value;
+
+    if (!url) {
+      alert("Please paste a video URL!");
+      return;
+    }
+
+    document.getElementById('generateBtn').disabled = true;
+    document.getElementById('statusCard').style.display = 'block';
+    document.getElementById('terminalLogs').innerHTML = '';
+
+    try {
+      const res = await fetch('/api/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url, clip_count: clipCount })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        alert(data.error || "Failed to start");
+        document.getElementById('generateBtn').disabled = false;
+        return;
+      }
+      pollingInterval = setInterval(pollStatus, 1500);
+    } catch (e) {
+      alert("Error contacting server: " + e.message);
+      document.getElementById('generateBtn').disabled = false;
+    }
+  }
+
+  async function pollStatus() {
+    try {
+      const res = await fetch('/api/status');
+      const state = await res.json();
+
+      document.getElementById('statusMsg').innerText = state.status_message;
+      document.getElementById('progressBar').style.width = state.progress + '%';
+
+      const term = document.getElementById('terminalLogs');
+      term.innerHTML = state.logs.map(l => `<div>> ${l}</div>`).join('');
+      term.scrollTop = term.scrollHeight;
+
+      if (!state.is_running) {
+        clearInterval(pollingInterval);
+        document.getElementById('generateBtn').disabled = false;
+        document.getElementById('statusHeader').innerText = "✅ Generation Finished! Click Download Below.";
+        loadExistingVideos();
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  }
+
+  loadExistingVideos();
+</script>
+
+</body>
+</html>
