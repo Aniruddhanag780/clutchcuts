@@ -24,7 +24,7 @@ class StubYoutubeDL:
 
 
 class ExtractVideoInfoTests(unittest.TestCase):
-    def test_retries_with_default_player_strategy_after_player_response_errors(self):
+    def test_uses_default_player_first_then_retries_alternate_strategies(self):
         info = {"title": "test video", "duration": 120}
         attempts = [
             StubYoutubeDL(yt_dlp.utils.DownloadError("no player response")),
@@ -41,9 +41,10 @@ class ExtractVideoInfoTests(unittest.TestCase):
 
         self.assertEqual(result, info)
         self.assertEqual(youtube_dl.call_count, 3)
-        self.assertTrue(youtube_dl.call_args_list[0].args[0]["getcomments"])
-        self.assertFalse(youtube_dl.call_args_list[1].args[0]["getcomments"])
-        self.assertNotIn("extractor_args", youtube_dl.call_args_list[2].args[0])
+        self.assertFalse(youtube_dl.call_args_list[0].args[0]["getcomments"])
+        self.assertNotIn("extractor_args", youtube_dl.call_args_list[0].args[0])
+        self.assertTrue(youtube_dl.call_args_list[1].args[0]["getcomments"])
+        self.assertFalse(youtube_dl.call_args_list[2].args[0]["getcomments"])
         self.assertEqual(len(logs), 2)
 
     def test_retries_slice_download_with_default_player_selection(self):

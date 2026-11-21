@@ -36,6 +36,10 @@ def extract_video_info(url, log):
     }
     attempts = [
         (
+            "default player selection",
+            {**common_opts, 'getcomments': False},
+        ),
+        (
             "community highlights",
             {
                 **common_opts,
@@ -59,10 +63,6 @@ def extract_video_info(url, log):
                 },
             },
         ),
-        (
-            "yt-dlp default player selection",
-            {**common_opts, 'getcomments': False},
-        ),
     ]
 
     errors = []
@@ -76,7 +76,7 @@ def extract_video_info(url, log):
         except yt_dlp.utils.DownloadError as exc:
             errors.append(exc)
         if label != attempts[-1][0]:
-            log(f"YouTube {label} attempt failed; trying another player strategy: {errors[-1]}")
+            log(f"YouTube details were unavailable with {label}; retrying with another strategy: {errors[-1]}")
 
     version = yt_dlp.version.__version__
     raise RuntimeError(
