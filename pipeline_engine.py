@@ -96,9 +96,12 @@ def extract_video_info(url, log):
     last_error = str(errors[-1])
     if is_bot_verification_error(last_error):
         raise RuntimeError(
-            "YouTube requires bot verification for this request. If you are signed in to YouTube "
-            "in a local browser, set YTDLP_COOKIES_FROM_BROWSER to that browser name and restart "
-            "the studio. Otherwise, try again later or use another publicly accessible video. "
+            "YouTube requires bot verification for this request. Browser cookies are read by the "
+            "machine running the Python backend; a Netlify or remote backend cannot access cookies "
+            "from your PC. To use your local YouTube sign-in, set YTDLP_COOKIES_FROM_BROWSER to "
+            "your browser name on the computer running the backend, then open the local studio "
+            "at http://localhost:5000. Otherwise, try again later or use another publicly "
+            "accessible video. "
             f"Last error: {last_error}"
         ) from errors[-1]
     raise RuntimeError(
@@ -123,10 +126,12 @@ def download_video_slice(slice_cmd, clip_num, log):
             retry_details = (retry_error.stderr or retry_error.stdout or str(retry_error)).strip()
             if is_bot_verification_error(retry_details):
                 raise RuntimeError(
-                    "YouTube requires bot verification during download. If you are signed in to "
-                    "YouTube in a local browser, set YTDLP_COOKIES_FROM_BROWSER to that browser "
-                    "name and restart the studio. Otherwise, try again later or use another "
-                    f"publicly accessible video. Last error: {retry_details}"
+                    "YouTube requires bot verification during download. Browser cookies are read "
+                    "by the machine running the Python backend; a Netlify or remote backend cannot "
+                    "access cookies from your PC. To use your local YouTube sign-in, set "
+                    "YTDLP_COOKIES_FROM_BROWSER to your browser name on the computer running the "
+                    "backend, then open the local studio at http://localhost:5000. Otherwise, try "
+                    f"again later or use another publicly accessible video. Last error: {retry_details}"
                 ) from retry_error
             raise RuntimeError(
                 f"Video slice #{clip_num} download failed with both YouTube player strategies. "

@@ -69,7 +69,7 @@ class ExtractVideoInfoTests(unittest.TestCase):
             patch.object(pipeline_engine, "get_config", return_value={"deno_path": None}),
             patch.object(yt_dlp, "YoutubeDL", side_effect=attempts),
         ):
-            with self.assertRaisesRegex(RuntimeError, "YTDLP_COOKIES_FROM_BROWSER"):
+            with self.assertRaisesRegex(RuntimeError, "cannot access cookies from your PC"):
                 pipeline_engine.extract_video_info("https://youtu.be/example", lambda _: None)
 
     def test_retries_slice_download_with_default_player_selection(self):

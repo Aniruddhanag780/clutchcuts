@@ -74,6 +74,8 @@ Automate clipping YouTube and Twitch livestreams into viral 9:16 vertical Shorts
    python web_app/server.py
    ```
    The setting is opt-in; yt-dlp reads cookies locally from that browser for metadata and downloads.
+   It only works when the Python backend runs on the same computer as the browser. A Netlify page
+   or remote backend cannot read cookies from your PC; open the local studio at `http://localhost:5000`.
    Never share exported cookie files or logs containing authentication data. This does not grant
    access to videos your account cannot view.
 
